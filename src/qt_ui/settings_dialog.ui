@@ -507,6 +507,77 @@
                 </layout>
                </widget>
               </item>
+              <item>
+               <widget class="QGroupBox" name="openALGroupBox">
+                <property name="title">
+                 <string>OpenAL Options</string>
+                </property>
+                <layout class="QFormLayout" name="openALFormLayout">
+                 <item row="0" column="0">
+                  <widget class="QLabel" name="openALHrtfLabel">
+                   <property name="text">
+                    <string>HRTF</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QComboBox" name="openALHrtfComboBox">
+                    <item>
+                     <property name="text">
+                      <string>Auto</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>On</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Off</string>
+                     </property>
+                    </item>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <widget class="QLabel" name="openALOutputModeLabel">
+                   <property name="text">
+                    <string>Output Mode</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="1" column="1">
+                  <widget class="QComboBox" name="openALOutputModeComboBox">
+                    <item>
+                     <property name="text">
+                      <string>Auto</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Stereo</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Quadraphonic</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>5.1 Surround</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>7.1 Surround</string>
+                     </property>
+                    </item>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
              </layout>
             </item>
            </layout>
@@ -1367,6 +1438,73 @@
                 </layout>
                </item>
                <item>
+                <widget class="QGroupBox" name="internalResolutionGroupBox">
+                 <property name="title">
+                  <string>Internal Resolution</string>
+                 </property>
+                 <layout class="QHBoxLayout" name="internalResLayout">
+                  <item>
+                   <widget class="QLabel" name="internalWidthLabel">
+                    <property name="text">
+                     <string>W:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="internalWidthSpinBox">
+                    <property name="accelerated">
+                     <bool>true</bool>
+                    </property>
+                    <property name="correctionMode">
+                     <enum>QAbstractSpinBox::CorrectionMode::CorrectToNearestValue</enum>
+                    </property>
+                    <property name="keyboardTracking">
+                     <bool>false</bool>
+                    </property>
+                    <property name="minimum">
+                     <number>1</number>
+                    </property>
+                    <property name="maximum">
+                     <number>9999</number>
+                    </property>
+                    <property name="value">
+                     <number>1280</number>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="internalHeightLabel">
+                    <property name="text">
+                     <string>H:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QSpinBox" name="internalHeightSpinBox">
+                    <property name="accelerated">
+                     <bool>true</bool>
+                    </property>
+                    <property name="correctionMode">
+                     <enum>QAbstractSpinBox::CorrectionMode::CorrectToNearestValue</enum>
+                    </property>
+                    <property name="keyboardTracking">
+                     <bool>false</bool>
+                    </property>
+                    <property name="minimum">
+                     <number>1</number>
+                    </property>
+                    <property name="maximum">
+                     <number>9999</number>
+                    </property>
+                    <property name="value">
+                     <number>720</number>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
                 <widget class="QCheckBox" name="enableHDRCheckBox">
                  <property name="text">
                   <string>Enable HDR</string>
@@ -1744,6 +1882,78 @@
                     <string>Use Circle Button to Confirm</string>
                    </property>
                   </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="specialPadCheckBox">
+                   <property name="text">
+                    <string>Use Special Pad</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QHBoxLayout" name="specialPadClassLayout">
+                   <item>
+                    <widget class="QLabel" name="specialPadClassLabel">
+                     <property name="text">
+                      <string>Special Pad Class</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QComboBox" name="specialPadClassComboBox">
+                     <item>
+                      <property name="text">
+                       <string>Standard</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Guitar</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Drum</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>DJ Turntable</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Dance Mat</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Navigation</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Steering Wheel</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Stick</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Fight Stick</string>
+                      </property>
+                     </item>
+                     <item>
+                      <property name="text">
+                       <string>Gun</string>
+                      </property>
+                     </item>
+                    </widget>
+                   </item>
+                  </layout>
                  </item>
                 </layout>
                </widget>
@@ -2627,6 +2837,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="deviceDiscoveryCheckBox">
+               <property name="text">
+                <string>Enable Device Discovery</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QGroupBox" name="p2pPortGroupBox">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
@@ -2994,6 +3211,40 @@
                    </property>
                    <property name="value">
                     <number>60</number>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+              <item>
+               <widget class="QGroupBox" name="submitDrawIntervalGroupBox">
+                <property name="title">
+                 <string>Submit Draw Interval</string>
+                </property>
+                <layout class="QVBoxLayout" name="submitDrawIntervalLayout">
+                 <item>
+                  <widget class="QSpinBox" name="submitDrawIntervalSpinBox">
+                   <property name="specialValueText">
+                    <string>Disabled</string>
+                   </property>
+                   <property name="accelerated">
+                    <bool>true</bool>
+                   </property>
+                   <property name="correctionMode">
+                    <enum>QAbstractSpinBox::CorrectionMode::CorrectToNearestValue</enum>
+                   </property>
+                   <property name="keyboardTracking">
+                    <bool>false</bool>
+                   </property>
+                   <property name="minimum">
+                    <number>0</number>
+                   </property>
+                   <property name="maximum">
+                    <number>100000</number>
+                   </property>
+                   <property name="value">
+                    <number>0</number>
                    </property>
                   </widget>
                  </item>

@@ -226,6 +226,9 @@ SettingsDialog::SettingsDialog(std::shared_ptr<GUISettings> gui_settings,
     SubscribeHelpText(ui->GenAudioComboBox, helptexts.settings.audio_general_device);
     SubscribeHelpText(ui->DsSpeakerGroupBox, helptexts.settings.audio_ds4_speaker);
     SubscribeHelpText(ui->DsAudioComboBox, helptexts.settings.audio_ds4_speaker);
+    SubscribeHelpText(ui->openALGroupBox, helptexts.settings.audio_openal_section);
+    SubscribeHelpText(ui->openALHrtfComboBox, helptexts.settings.audio_openal_hrtf);
+    SubscribeHelpText(ui->openALOutputModeComboBox, helptexts.settings.audio_openal_output_mode);
 
     // Compatibility
     SubscribeHelpText(ui->CompatgroupBox, helptexts.settings.compat_section);
@@ -243,6 +246,12 @@ SettingsDialog::SettingsDialog(std::shared_ptr<GUISettings> gui_settings,
     SubscribeHelpText(ui->windowSizeGroupBox, helptexts.settings.gpu_window_size);
     SubscribeHelpText(ui->widthSpinBox, helptexts.settings.gpu_window_size);
     SubscribeHelpText(ui->heightSpinBox, helptexts.settings.gpu_window_size);
+    SubscribeHelpText(ui->nullGpuCheckBox, helptexts.settings.gpu_null);
+    SubscribeHelpText(ui->internalResolutionGroupBox, helptexts.settings.gpu_internal_resolution);
+    SubscribeHelpText(ui->internalWidthSpinBox, helptexts.settings.gpu_internal_resolution);
+    SubscribeHelpText(ui->internalHeightSpinBox, helptexts.settings.gpu_internal_resolution);
+    SubscribeHelpText(ui->submitDrawIntervalGroupBox, helptexts.settings.gpu_submit_draw_interval);
+    SubscribeHelpText(ui->submitDrawIntervalSpinBox, helptexts.settings.gpu_submit_draw_interval);
     SubscribeHelpText(ui->enableHDRCheckBox, helptexts.settings.gpu_enable_hdr);
     SubscribeHelpText(ui->heightDivider, helptexts.settings.gpu_vblank_frequency);
     SubscribeHelpText(ui->vblankSpinBox, helptexts.settings.gpu_vblank_frequency);
@@ -274,6 +283,9 @@ SettingsDialog::SettingsDialog(std::shared_ptr<GUISettings> gui_settings,
     SubscribeHelpText(ui->keyboardAsKeyboardCheckBox,
                       helptexts.settings.input_keyboard_as_keyboard);
     SubscribeHelpText(ui->circleEnterCheckBox, helptexts.settings.input_circle_confirm);
+    SubscribeHelpText(ui->specialPadCheckBox, helptexts.settings.input_special_pad);
+    SubscribeHelpText(ui->specialPadClassLabel, helptexts.settings.input_special_pad_class);
+    SubscribeHelpText(ui->specialPadClassComboBox, helptexts.settings.input_special_pad_class);
     SubscribeHelpText(ui->imeGroupBox, helptexts.settings.input_ime_section);
     SubscribeHelpText(ui->imeAccessibilityCheckBox, helptexts.settings.input_ime_accessibility);
     SubscribeHelpText(ui->imeUrlMailShortPanelCheckBox,
@@ -320,6 +332,7 @@ SettingsDialog::SettingsDialog(std::shared_ptr<GUISettings> gui_settings,
     SubscribeHelpText(ui->psnSignInCheckBox, helptexts.settings.network_shadnet);
     SubscribeHelpText(ui->upnpCheckBox, helptexts.settings.network_upnp);
     SubscribeHelpText(ui->disableHttpsCheckBox, helptexts.settings.network_disable_https);
+    SubscribeHelpText(ui->deviceDiscoveryCheckBox, helptexts.settings.network_device_discovery);
     SubscribeHelpText(ui->p2pPortGroupBox, helptexts.settings.network_p2p_port);
     SubscribeHelpText(ui->p2pPortSpinBox, helptexts.settings.network_p2p_port);
     SubscribeHelpText(ui->shadNetGroupBox, helptexts.settings.network_shadnet_config);
@@ -605,6 +618,14 @@ void SettingsDialog::OtherConnections() {
     connect(ui->audioBackendComboBox, &QComboBox::currentIndexChanged, this,
             &SettingsDialog::RefreshAudioDevices);
 
+    // ------------------ Input tab --------------------------------------------------------
+    // The pad class only matters while the special pad is in use. Per-game dialogs keep it
+    // disabled, since special pad settings cannot be overridden per-game.
+    connect(ui->specialPadCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        ui->specialPadClassLabel->setEnabled(checked && IsGlobal());
+        ui->specialPadClassComboBox->setEnabled(checked && IsGlobal());
+    });
+
     // ------------------ Gui tab --------------------------------------------------------
     connect(ui->BGMVolumeSlider, &QSlider::valueChanged, this,
             [](int value) { BackgroundMusicPlayer::getInstance().SetVolume(value); });
@@ -691,6 +712,13 @@ void SettingsDialog::LoadValuesFromConfig() {
         QString::fromStdString(m_emu_settings->GetSDLPadSpkOutputDevice()));
 
     ui->audioBackendComboBox->setCurrentIndex(EmulatorSettings.GetAudioBackend());
+    {
+        const int hrtf = static_cast<int>(m_emu_settings->GetOpenALHrtf());
+        ui->openALHrtfComboBox->setCurrentIndex(hrtf < ui->openALHrtfComboBox->count() ? hrtf : 0);
+        const int mode = static_cast<int>(m_emu_settings->GetOpenALOutputMode());
+        ui->openALOutputModeComboBox->setCurrentIndex(
+            mode < ui->openALOutputModeComboBox->count() ? mode : 0);
+    }
     RefreshAudioDevices();
 
     // ------------------ GUI tab --------------------------------------------------------
@@ -742,6 +770,8 @@ void SettingsDialog::LoadValuesFromConfig() {
     ui->nullGpuCheckBox->setChecked(m_emu_settings->IsNullGPU());
     ui->heightSpinBox->setValue(m_emu_settings->GetWindowHeight());
     ui->widthSpinBox->setValue(m_emu_settings->GetWindowWidth());
+    ui->internalHeightSpinBox->setValue(m_emu_settings->GetInternalScreenHeight());
+    ui->internalWidthSpinBox->setValue(m_emu_settings->GetInternalScreenWidth());
     ui->enableHDRCheckBox->setChecked(m_emu_settings->IsHdrAllowed());
 
     ui->FSRCheckBox->setChecked(m_emu_settings->IsFsrEnabled());
@@ -773,6 +803,15 @@ void SettingsDialog::LoadValuesFromConfig() {
     ui->circleEnterCheckBox->setChecked(m_emu_settings->IsCircleEnter());
     ui->miceUsedAsMiceCheckBox->setChecked(m_emu_settings->IsMiceUsedAsMice());
     ui->keyboardAsKeyboardCheckBox->setChecked(m_emu_settings->IsKeyboardUsedAsKeyboard());
+    {
+        const int pad_class = m_emu_settings->GetSpecialPadClass();
+        ui->specialPadClassComboBox->setCurrentIndex(
+            pad_class >= 0 && pad_class < ui->specialPadClassComboBox->count() ? pad_class : 0);
+        const bool special_pad = m_emu_settings->IsUsingSpecialPad();
+        ui->specialPadCheckBox->setChecked(special_pad);
+        ui->specialPadClassLabel->setEnabled(special_pad && IsGlobal());
+        ui->specialPadClassComboBox->setEnabled(special_pad && IsGlobal());
+    }
     ui->cameraComboBox->setCurrentIndex(EmulatorSettings.GetCameraId() + 1);
 
     // ------------------ Log tab --------------------------------------------------------
@@ -839,6 +878,8 @@ void SettingsDialog::LoadValuesFromConfig() {
     ui->dmemSpinBox->setValue(m_emu_settings->GetExtraDmemInMBytes());
     ui->fmemSpinBox->setValue(m_emu_settings->GetExtraFmemInMBytes());
     ui->vblankSpinBox->setValue(m_emu_settings->GetVblankFrequency());
+    ui->submitDrawIntervalSpinBox->setValue(
+        static_cast<int>(m_emu_settings->GetSubmitDrawInterval()));
 
     // ------------------ Network tab --------------------------------------------------------
     ui->networkConnectedCheckBox->setChecked(m_emu_settings->IsConnectedToNetwork());
@@ -846,6 +887,7 @@ void SettingsDialog::LoadValuesFromConfig() {
     ui->psnSignInCheckBox->setChecked(m_emu_settings->IsShadNetEnabledSetting());
     ui->upnpCheckBox->setChecked(m_emu_settings->IsUPnPEnabled());
     ui->disableHttpsCheckBox->setChecked(m_emu_settings->IsForcedHttpsDisabled());
+    ui->deviceDiscoveryCheckBox->setChecked(m_emu_settings->IsDeviceDiscoveryEnabled());
     ui->p2pPortSpinBox->setValue(m_emu_settings->GetP2PPort());
     ui->shadNetServerLineEdit->setText(QString::fromStdString(m_emu_settings->GetShadNetServer()));
     ui->shadNetWebApiServerLineEdit->setText(
@@ -968,6 +1010,9 @@ void SettingsDialog::ApplyValuesToBackend() {
                                             is_specific);
     }
 
+    m_emu_settings->SetOpenALHrtf(ui->openALHrtfComboBox->currentIndex(), is_specific);
+    m_emu_settings->SetOpenALOutputMode(ui->openALOutputModeComboBox->currentIndex(), is_specific);
+
     m_emu_settings->SetVolumeSlider(ui->horizontalVolumeSlider->value(), is_specific);
 
     // ------------------ GUI tab --------------------------------------------------------
@@ -1009,6 +1054,9 @@ void SettingsDialog::ApplyValuesToBackend() {
 
     m_emu_settings->SetWindowHeight(ui->heightSpinBox->value(), is_specific);
     m_emu_settings->SetWindowWidth(ui->widthSpinBox->value(), is_specific);
+    m_emu_settings->SetInternalScreenHeight(ui->internalHeightSpinBox->value(), is_specific);
+    m_emu_settings->SetInternalScreenWidth(ui->internalWidthSpinBox->value(), is_specific);
+    m_emu_settings->SetNullGPU(ui->nullGpuCheckBox->isChecked(), is_specific);
     m_emu_settings->SetHdrAllowed(ui->enableHDRCheckBox->isChecked(), is_specific);
 
     m_emu_settings->SetFsrEnabled(ui->FSRCheckBox->isChecked(), is_specific);
@@ -1043,6 +1091,8 @@ void SettingsDialog::ApplyValuesToBackend() {
     m_emu_settings->SetMiceUsedAsMice(ui->miceUsedAsMiceCheckBox->isChecked(), is_specific);
     m_emu_settings->SetKeyboardUsedAsKeyboard(ui->keyboardAsKeyboardCheckBox->isChecked(),
                                               is_specific);
+    m_emu_settings->SetUsingSpecialPad(ui->specialPadCheckBox->isChecked(), is_specific);
+    m_emu_settings->SetSpecialPadClass(ui->specialPadClassComboBox->currentIndex(), is_specific);
     EmulatorSettings.SetCameraId(ui->cameraComboBox->currentIndex() - 1, is_specific);
 
     // ------------------ Log tab --------------------------------------------------------
@@ -1098,6 +1148,7 @@ void SettingsDialog::ApplyValuesToBackend() {
     m_emu_settings->SetExtraDmemInMBytes(ui->dmemSpinBox->value(), is_specific);
     m_emu_settings->SetExtraFmemInMBytes(ui->fmemSpinBox->value(), is_specific);
     m_emu_settings->SetVblankFrequency(ui->vblankSpinBox->value(), is_specific);
+    m_emu_settings->SetSubmitDrawInterval(ui->submitDrawIntervalSpinBox->value(), is_specific);
     m_emu_settings->SetRedZonePatchingEnabled(ui->redZoneCheckBox->isChecked(), is_specific);
     m_emu_settings->SetUserfaultfdTracking(ui->userfaultfdCheckBox->isChecked(), is_specific);
 
@@ -1106,6 +1157,8 @@ void SettingsDialog::ApplyValuesToBackend() {
     m_emu_settings->SetShadNetEnabled(ui->psnSignInCheckBox->isChecked(), is_specific);
     m_emu_settings->SetUPnPEnabled(ui->upnpCheckBox->isChecked(), is_specific);
     m_emu_settings->SetForcedHttpsDisabled(ui->disableHttpsCheckBox->isChecked(), is_specific);
+    m_emu_settings->SetDeviceDiscoveryEnabled(ui->deviceDiscoveryCheckBox->isChecked(),
+                                              is_specific);
     m_emu_settings->SetP2PPort(ui->p2pPortSpinBox->value(), is_specific);
     m_emu_settings->SetShadNetServer(ui->shadNetServerLineEdit->text().toStdString(), is_specific);
     m_emu_settings->SetShadNetWebApiServer(ui->shadNetWebApiServerLineEdit->text().toStdString(),
@@ -1324,6 +1377,7 @@ void SettingsDialog::RefreshAudioDevices() {
     ui->micComboBox->clear();
 
     const QString backend = ui->audioBackendComboBox->currentText();
+    ui->openALGroupBox->setVisible(backend == "OpenAL");
 
     QStringList playbackDeviceList;
     QStringList recordingDeviceList;
@@ -1487,12 +1541,16 @@ void SettingsDialog::MapUIControls() {
     m_uiSettingMap[ui->GenAudioComboBox] = {"main_output_device", "Audio"};
     m_uiSettingMap[ui->DsAudioComboBox] = {"padSpk_output_device", "Audio"};
     m_uiSettingMap[ui->micComboBox] = {"mic_device", "Audio"};
+    m_uiSettingMap[ui->openALHrtfComboBox] = {"openal_hrtf", "Audio"};
+    m_uiSettingMap[ui->openALOutputModeComboBox] = {"openal_output_mode", "Audio"};
 
     // GPU Settings
     m_uiSettingMap[ui->graphicsAdapterBox] = {"gpu_id", "Vulkan"}; // Note: This is in Vulkan group
     m_uiSettingMap[ui->nullGpuCheckBox] = {"null_gpu", "GPU"};
     m_uiSettingMap[ui->heightSpinBox] = {"window_height", "GPU"};
     m_uiSettingMap[ui->widthSpinBox] = {"window_width", "GPU"};
+    m_uiSettingMap[ui->internalHeightSpinBox] = {"internal_screen_height", "GPU"};
+    m_uiSettingMap[ui->internalWidthSpinBox] = {"internal_screen_width", "GPU"};
     m_uiSettingMap[ui->enableHDRCheckBox] = {"hdr_allowed", "GPU"};
     m_uiSettingMap[ui->FSRCheckBox] = {"fsr_enabled", "GPU"};
     m_uiSettingMap[ui->RCASCheckBox] = {"rcas_enabled", "GPU"};
@@ -1516,6 +1574,8 @@ void SettingsDialog::MapUIControls() {
     m_uiSettingMap[ui->circleEnterCheckBox] = {"is_circle_enter", "Input"};
     m_uiSettingMap[ui->miceUsedAsMiceCheckBox] = {"use_mice_as_mice", "Input"};
     m_uiSettingMap[ui->keyboardAsKeyboardCheckBox] = {"use_keyboard_as_keyboard", "Input"};
+    m_uiSettingMap[ui->specialPadCheckBox] = {"use_special_pad", "Input"};
+    m_uiSettingMap[ui->specialPadClassComboBox] = {"special_pad_class", "Input"};
 
     // Log Settings
     m_uiSettingMap[ui->enableLoggingCheckBox] = {"enable", "Log"};
@@ -1556,12 +1616,14 @@ void SettingsDialog::MapUIControls() {
     m_uiSettingMap[ui->dmemSpinBox] = {"extra_dmem_in_mbytes", "General"};
     m_uiSettingMap[ui->fmemSpinBox] = {"extra_fmem_in_mbytes", "General"};
     m_uiSettingMap[ui->vblankSpinBox] = {"vblank_frequency", "GPU"};
+    m_uiSettingMap[ui->submitDrawIntervalSpinBox] = {"submit_draw_interval", "GPU"};
 
     // Network Settings
     m_uiSettingMap[ui->networkConnectedCheckBox] = {"connected_to_network", "Network"};
     m_uiSettingMap[ui->psnSignInCheckBox] = {"shad_net_enabled", "Network"};
     m_uiSettingMap[ui->upnpCheckBox] = {"enable_upnp", "Network"};
     m_uiSettingMap[ui->disableHttpsCheckBox] = {"disable_https", "Network"};
+    m_uiSettingMap[ui->deviceDiscoveryCheckBox] = {"enable_device_discovery", "Network"};
     m_uiSettingMap[ui->p2pPortSpinBox] = {"p2p_port", "Network"};
     m_uiSettingMap[ui->shadNetServerLineEdit] = {"shadnet_server", "Network"};
     m_uiSettingMap[ui->shadNetWebApiServerLineEdit] = {"shadnet_webapi_server", "Network"};

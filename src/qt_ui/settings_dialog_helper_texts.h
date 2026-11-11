@@ -67,6 +67,9 @@ public:
         const QString audio_backend = tr("Audio Backend:\\nSelects the backend library used for audio output. SDL is recommended for most users.");
         const QString audio_general_device = tr("Audio Device (general):\\nSelects which system audio output device the emulator uses for general game audio.");
         const QString audio_ds4_speaker = tr("Audio Device (DS4 speaker):\\nSelects which system audio output device is used for sound played through a connected DualShock 4/DualSense controller's built-in speaker.");
+        const QString audio_openal_section = tr("OpenAL Options:\\nOptions that only apply when the OpenAL audio backend is selected.");
+        const QString audio_openal_hrtf = tr("HRTF:\\nControls binaural (headphone surround) rendering in OpenAL.\\nAuto: Let OpenAL decide, usually on for headphone-like stereo outputs.\\nOn: Always use HRTF.\\nOff: Never use HRTF.");
+        const QString audio_openal_output_mode = tr("Output Mode:\\nSelects the speaker layout OpenAL outputs.\\nAuto lets OpenAL negotiate the layout with the audio device; the other options force stereo, quadraphonic, 5.1 or 7.1 output.");
         //compatibility
         const QString compat_section = tr("Compatibility:\\nSettings for displaying and updating the game compatibility database.");
         const QString compat_check_on_startup = tr("Update Compatibility On Startup:\\nAutomatically update the compatibility database when shadPS4 starts.");
@@ -76,8 +79,11 @@ public:
         const QString gpu_graphics_adapter = tr("Graphics Device:\\nOn multiple GPU systems, select the GPU the emulator will use from the drop down list,\\nor select \"Auto Select\" to automatically determine it.");
         const QString gpu_present_mode = tr("Present Mode:\\nConfigures how video output will be presented to your screen.\\n\\nMailbox: Frames synchronize with your screen's refresh rate. New frames will replace any pending frames. Reduces latency but may skip frames if running behind.\\nFifo: Frames synchronize with your screen's refresh rate. New frames will be queued behind pending frames. Ensures all frames are presented but may increase latency.\\nImmediate: Frames immediately present to your screen when ready. May result in tearing.");
         const QString gpu_window_size = tr("Width/Height:\\nSets the size of the emulator window at launch, which can be resized during gameplay.\\nThis is different from the in-game resolution.");
+        const QString gpu_null = tr("Enable NULL GPU:\\nFor the sake of technical debugging, disables game rendering as if there were no graphics card.");
+        const QString gpu_internal_resolution = tr("Internal Resolution:\\nSets the width and height of the emulated console\'s video output.\\nThis is different from the window size. The default is 1280x720.");
         const QString gpu_enable_hdr = tr("Enable HDR:\\nEnables HDR in games that support it.\\nYour monitor must have support for the BT2020 PQ color space and the RGB10A2 swapchain format.");
         const QString gpu_vblank_frequency = tr("Vblank Frequency:\\nThe frame rate at which the emulator refreshes at (60hz is the baseline, whether the game runs at 30 or 60fps). Changing this may have adverse effects, such as increasing the game speed, or breaking critical game functionality that does not expect this to change!");
+        const QString gpu_submit_draw_interval = tr("Submit Draw Interval:\\nSubmits pending GPU work to the driver after this many draw calls instead of waiting for the usual flush points.\\nLeave this disabled (0) unless a game needs it.");
         const QString gpu_readback_linear_images = tr("Enable Readback Linear Images:\\nEnables async downloading of GPU modified linear images.\\nMight fix issues in some games.");
         const QString gpu_display_options = tr("Display Options:\\nSettings that control how and where the emulator's video output is presented.");
         const QString gpu_display_mode = tr("Display Mode:\\nChoose whether the game runs in a window, fullscreen, or borderless fullscreen.");
@@ -95,6 +101,8 @@ public:
         const QString input_controller_section = tr("Controller:\\nSettings related to gamepad and mouse input behavior.");
         const QString input_mice_as_mice = tr("Use Mice as Mice:\\nLets the mouse behave as a regular mouse instead of being treated as an emulated controller input.");
         const QString input_circle_confirm = tr("Use Circle Button to Confirm:\\nSwaps the Circle and Cross buttons' roles so Circle acts as the confirm/enter button, matching Japanese console conventions.");
+        const QString input_special_pad = tr("Use Special Pad:\\nReports the controller to games as a special peripheral of the class selected below instead of a standard gamepad.");
+        const QString input_special_pad_class = tr("Special Pad Class:\\nThe type of peripheral reported to games while Use Special Pad is enabled, for example a guitar, drum kit or steering wheel.");
         const QString input_ime_section = tr("IME:\\nSettings for the on-screen keyboard/input method editor used by games for text entry.");
         const QString input_ime_accessibility = tr("Enable IME Accessibility:\\nEnables accessibility features for the on-screen keyboard, such as additional audio/visual cues.");
         const QString input_ime_url_mail_panel = tr("Enable IME URL/Email Short Panel:\\nShows a shortened on-screen keyboard layout optimized for entering URLs and email addresses.");
@@ -123,6 +131,7 @@ public:
         const QString network_shadnet_server = tr("Server:\\nThe address of the ShadNet server to connect to.");
         const QString network_shadnet_webapi = tr("WebAPI Server:\\nThe address of the ShadNet WebAPI server used for account and session management.");
         const QString network_upnp = tr("Enable UPnP:\\nAutomatically configure port forwarding on your router via UPnP for ShadNet's networked features.");
+        const QString network_device_discovery = tr("Enable Device Discovery:\\nLets the emulated console answer device discovery requests on your local network while a game is running. Requires Enable Network Connection.");
         const QString network_section = tr("Network:\\nNetworking options for the emulated console, including ShadNet online service and peer-to-peer settings.");
         const QString network_disable_https = tr("Disable HTTPS:\\nWhen a game turns on HTTPS security options (such as server certificate verification), the emulator turns them off instead.\\nUseful when connecting to custom servers with self-signed or invalid certificates.");
         const QString network_p2p_port = tr("P2P Port:\\nThe local port used for peer-to-peer connections. 3658 is the default PS4 port,set it to 0 to use any free port.\\nWhen UPnP is enabled, this port is forwarded on your router.");
