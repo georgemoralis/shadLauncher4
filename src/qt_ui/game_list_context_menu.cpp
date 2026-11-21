@@ -52,6 +52,7 @@
 #include "common/path_util.h"
 #include "core/ipc/ipc_client.h"
 #include "dlc_viewer_dialog.h"
+#include "host_overrides_dialog.h"
 #include "settings_dialog.h"
 #include "sfo_viewer_dialog.h"
 #include "trophy_viewer.h"
@@ -1273,6 +1274,45 @@ void GameListContextMenu::Show(const game_info& gameinfo, const QPoint& global_p
         connect(frame, &QWidget::destroyed, cheatsPatches,
                 [cheatsPatches]() { cheatsPatches->deleteLater(); });
     });
+
+    if (HostOverridesDialog::IsValidTitleId(serial)) {
+        QMenu* host_overrides_menu = addMenu(tr("Network &Host Overrides"));
+        QAction* host_overrides_edit = host_overrides_menu->addAction(tr("&Edit..."));
+        QAction* host_overrides_download =
+            host_overrides_menu->addAction(tr("&Download from shad-net"));
+        connect(host_overrides_edit, &QAction::triggered, frame, [frame, serial, name] {
+            HostOverridesDialog dlg(serial, name, frame);
+            dlg.exec();
+        });
+        connect(host_overrides_download, &QAction::triggered, frame, [frame, serial] {
+            bool overwrite = false;
+            if (HostOverridesDialog::HasUserWrittenFile(serial)) {
+                if (QMessageBox::question(
+                        frame, tr("Replace local overrides?"),
+                        tr("%1 has host overrides you edited yourself. Replace them with the "
+                           "version published on shad-net?")
+                            .arg(serial)) != QMessageBox::Yes) {
+                    return;
+                }
+                overwrite = true;
+            }
+            QPointer<GameListFrame> guard(frame);
+            HostOverridesDialog::DownloadForTitle(
+                serial, frame,
+                [guard](const HostOverridesDownloadResult& result) {
+                    if (!guard) {
+                        return;
+                    }
+                    if (result.status == HostOverridesDownloadResult::Status::Failed) {
+                        QMessageBox::warning(guard, tr("Download failed"), result.message);
+                    } else {
+                        QMessageBox::information(guard, tr("Network Host Overrides"),
+                                                 result.message);
+                    }
+                },
+                overwrite);
+        });
+    }
 
     QAction* trophy_viewer = addAction(tr("&Trophy Viewer"));
     connect(trophy_viewer, &QAction::triggered, frame, [frame, current_game] {

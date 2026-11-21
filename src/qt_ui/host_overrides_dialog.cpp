@@ -13,7 +13,13 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QSaveFile>
 #include <QTableWidget>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -21,16 +27,48 @@
 #include <nlohmann/json.hpp>
 
 #include "common/path_util.h"
+#include "common/scm_rev.h"
 #include "host_overrides_dialog.h"
 
 namespace {
+
+// Published per-game overrides: <RepoBaseUrl><TITLE_ID>.json
+constexpr const char* RepoBaseUrl =
+    "https://raw.githubusercontent.com/shad-net/http_host_overrides/main/";
+constexpr const char* RepoPageUrl = "https://github.com/shad-net/http_host_overrides";
+// Same limits the emulator applies to downloaded files.
+constexpr qint64 MaxFileSize = 256 * 1024;
+constexpr int TransferTimeoutMs = 15000;
+
+std::filesystem::path EtagPathFor(const std::filesystem::path& json_path) {
+    auto p = json_path;
+    p += ".etag";
+    return p;
+}
+
+bool WriteFileAtomic(const std::filesystem::path& path, const QByteArray& data) {
+    QString qpath;
+    Common::FS::PathToQString(qpath, path);
+    QSaveFile f(qpath);
+    if (!f.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+    if (f.write(data) != data.size()) {
+        f.cancelWriting();
+        return false;
+    }
+    return f.commit();
+}
+
+void RemoveIfExists(const std::filesystem::path& path) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
 
 constexpr int ColEnabled = 0;
 constexpr int ColMatch = 1;
 constexpr int ColTarget = 2;
 
-// Validate a redirect *target* value against
-//   host | host:port | http(s)://host | http(s)://host:port
 QString ValidateTarget(const QString& raw) {
     QString value = raw.trimmed();
     if (value.isEmpty()) {
@@ -63,7 +101,6 @@ QString ValidateTarget(const QString& raw) {
     return {};
 }
 
-// Validate a *match* key. Allows "*", "host", "host:port", "scheme://host:port".
 QString ValidateMatch(const QString& raw) {
     const QString key = raw.trimmed();
     if (key.isEmpty()) {
@@ -162,8 +199,141 @@ std::filesystem::path HostOverridesDialog::FilePath() {
     return Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "host_overrides.json";
 }
 
+std::filesystem::path HostOverridesDialog::PerGameDir() {
+    return Common::FS::GetUserPath(Common::FS::PathType::UserDir) / "host_overrides";
+}
+
+std::filesystem::path HostOverridesDialog::PerGameFilePath(const QString& title_id) {
+    return PerGameDir() / (title_id.toStdString() + ".json");
+}
+
+bool HostOverridesDialog::IsValidTitleId(const QString& title_id) {
+    static const QRegularExpression re(QStringLiteral("^[A-Z]{4}[0-9]{5}$"));
+    return re.match(title_id).hasMatch();
+}
+
+bool HostOverridesDialog::HasUserWrittenFile(const QString& title_id) {
+    if (!IsValidTitleId(title_id)) {
+        return false;
+    }
+    std::error_code ec;
+    const auto json_path = PerGameFilePath(title_id);
+    return std::filesystem::exists(json_path, ec) &&
+           !std::filesystem::exists(EtagPathFor(json_path), ec);
+}
+
+void HostOverridesDialog::DownloadForTitle(
+    const QString& title_id, QObject* context,
+    std::function<void(const HostOverridesDownloadResult&)> on_done, bool overwrite_user_file) {
+    using Status = HostOverridesDownloadResult::Status;
+    auto finish = [on_done](Status status, const QString& message) {
+        if (on_done) {
+            on_done(HostOverridesDownloadResult{status, message});
+        }
+    };
+
+    if (!IsValidTitleId(title_id)) {
+        finish(Status::Failed, tr("'%1' is not a valid title id.").arg(title_id));
+        return;
+    }
+    if (!overwrite_user_file && HasUserWrittenFile(title_id)) {
+        finish(Status::Failed,
+               tr("%1 already has locally edited host overrides; they were left unchanged.")
+                   .arg(title_id));
+        return;
+    }
+
+    auto* manager = new QNetworkAccessManager(context);
+    QNetworkRequest request(QUrl(QString::fromLatin1(RepoBaseUrl) + title_id + ".json"));
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setHeader(
+        QNetworkRequest::UserAgentHeader,
+        QStringLiteral("shadLauncher4/%1").arg(QString::fromLatin1(Common::g_version)));
+    request.setTransferTimeout(TransferTimeoutMs);
+
+    QNetworkReply* reply = manager->get(request);
+    QObject::connect(reply, &QNetworkReply::finished, manager, [=]() {
+        reply->deleteLater();
+        manager->deleteLater();
+
+        const int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const auto json_path = PerGameFilePath(title_id);
+        const auto etag_path = EtagPathFor(json_path);
+
+        if (http_status == 404) {
+            // Mirror the emulator: a previously downloaded copy that was removed
+            // upstream is deleted; a user-written file is never touched.
+            std::error_code ec;
+            if (std::filesystem::exists(etag_path, ec)) {
+                RemoveIfExists(json_path);
+                RemoveIfExists(etag_path);
+            }
+            finish(Status::NotPublished,
+                   tr("No host overrides are published for %1 yet.").arg(title_id));
+            return;
+        }
+        if (reply->error() != QNetworkReply::NoError) {
+            finish(Status::Failed, tr("Download failed: %1").arg(reply->errorString()));
+            return;
+        }
+        if (http_status != 200) {
+            finish(Status::Failed,
+                   tr("Download failed: unexpected HTTP status %1.").arg(http_status));
+            return;
+        }
+
+        const QByteArray body = reply->readAll();
+        if (body.size() > MaxFileSize) {
+            finish(Status::Failed,
+                   tr("The published file is too large (%1 bytes).").arg(body.size()));
+            return;
+        }
+        try {
+            if (!nlohmann::ordered_json::parse(body.toStdString()).is_object()) {
+                finish(Status::Failed, tr("The published file is not a JSON object."));
+                return;
+            }
+        } catch (const std::exception&) {
+            finish(Status::Failed, tr("The published file is not valid JSON."));
+            return;
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories(json_path.parent_path(), ec);
+        if (!WriteFileAtomic(json_path, body)) {
+            QString p;
+            Common::FS::PathToQString(p, json_path);
+            finish(Status::Failed, tr("Could not write %1").arg(p));
+            return;
+        }
+        WriteFileAtomic(etag_path, reply->rawHeader("ETag"));
+        finish(Status::Downloaded, tr("Downloaded host overrides for %1.").arg(title_id));
+    });
+}
+
 HostOverridesDialog::HostOverridesDialog(QWidget* parent) : QDialog(parent) {
-    setWindowTitle(tr("Network Host Overrides"));
+    Init();
+}
+
+HostOverridesDialog::HostOverridesDialog(const QString& title_id, const QString& game_name,
+                                         QWidget* parent)
+    : QDialog(parent), m_title_id(title_id), m_game_name(game_name) {
+    Init();
+}
+
+std::filesystem::path HostOverridesDialog::CurrentPath() const {
+    return IsPerGame() ? PerGameFilePath(m_title_id) : FilePath();
+}
+
+void HostOverridesDialog::Init() {
+    if (IsPerGame()) {
+        setWindowTitle(m_game_name.isEmpty()
+                           ? tr("Network Host Overrides - %1").arg(m_title_id)
+                           : tr("Network Host Overrides - %1 (%2)").arg(m_game_name, m_title_id));
+    } else {
+        setWindowTitle(tr("Network Host Overrides"));
+    }
     setObjectName("HostOverridesDialog");
     setModal(true);
     setMinimumSize(640, 420);
@@ -180,6 +350,20 @@ HostOverridesDialog::HostOverridesDialog(QWidget* parent) : QDialog(parent) {
         "<tt>scheme://host:port</tt> &middot; <tt>*</tt> (catch-all)<br>"
         "Targets look like <tt>host</tt>, <tt>host:port</tt>, or "
         "<tt>http(s)://host[:port]</tt>. Unchecked rows are saved but ignored by the emulator."));
+    if (!IsPerGame()) {
+        intro->setText(intro->text() + QStringLiteral("<br><br>") +
+                       tr("To set or download overrides for a single game, right-click it in "
+                          "the game list and choose <b>Network Host Overrides</b>."));
+    } else {
+        intro->setText(
+            intro->text() + QStringLiteral("<br><br>") +
+            tr("These overrides apply only to this game and replace the global list while it "
+               "runs. Use <b>Download from shad-net</b> to get the overrides published for this "
+               "game at <a href=\"%1\">shad-net/http_host_overrides</a>. Saving an empty list "
+               "removes the per-game file, so the global list is used again.")
+                .arg(QString::fromLatin1(RepoPageUrl)));
+        intro->setOpenExternalLinks(true);
+    }
 
     // Table
     m_table = new QTableWidget(this);
@@ -226,9 +410,13 @@ HostOverridesDialog::HostOverridesDialog(QWidget* parent) : QDialog(parent) {
     m_path_label->setTextInteractionFlags(Qt::TextSelectableByMouse);
     {
         QString p;
-        Common::FS::PathToQString(p, FilePath());
+        Common::FS::PathToQString(p, CurrentPath());
         m_path_label->setText(tr("File: %1").arg(p));
     }
+    m_source_label = new QLabel(this);
+    m_source_label->setObjectName("HostOverridesDialog_source");
+    m_source_label->setWordWrap(true);
+    m_source_label->setVisible(IsPerGame());
     {
         QFont f = m_path_label->font();
         f.setPointSizeF(f.pointSizeF() - 1.0);
@@ -238,13 +426,21 @@ HostOverridesDialog::HostOverridesDialog(QWidget* parent) : QDialog(parent) {
     // Dialog buttons
     auto* buttons = new QDialogButtonBox(this);
     auto* open_btn = buttons->addButton(tr("Open Folder"), QDialogButtonBox::ActionRole);
+    if (IsPerGame()) {
+        m_download_btn =
+            buttons->addButton(tr("&Download from shad-net"), QDialogButtonBox::ActionRole);
+        m_download_btn->setAutoDefault(false);
+        connect(m_download_btn, &QPushButton::clicked, this, &HostOverridesDialog::OnDownload);
+    }
     auto* save_btn = buttons->addButton(QDialogButtonBox::Save);
     buttons->addButton(QDialogButtonBox::Close);
     save_btn->setDefault(true);
 
     connect(open_btn, &QPushButton::clicked, this, [this]() {
         QString dir;
-        Common::FS::PathToQString(dir, FilePath().parent_path());
+        std::error_code ec;
+        std::filesystem::create_directories(CurrentPath().parent_path(), ec);
+        Common::FS::PathToQString(dir, CurrentPath().parent_path());
         QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
     });
     connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
@@ -258,6 +454,7 @@ HostOverridesDialog::HostOverridesDialog(QWidget* parent) : QDialog(parent) {
     root->addWidget(intro);
     root->addWidget(m_table, 1);
     root->addLayout(edit_row);
+    root->addWidget(m_source_label);
     root->addWidget(m_path_label);
     root->addWidget(buttons);
     setLayout(root);
@@ -422,7 +619,7 @@ void HostOverridesDialog::OnExport() {
     }
 
     QString default_path;
-    Common::FS::PathToQString(default_path, FilePath());
+    Common::FS::PathToQString(default_path, CurrentPath());
     const QString file_name = QFileDialog::getSaveFileName(
         this, tr("Export Host Overrides"), default_path, tr("JSON Files (*.json);;All Files (*)"));
     if (file_name.isEmpty()) {
@@ -448,7 +645,20 @@ void HostOverridesDialog::OnExport() {
 void HostOverridesDialog::LoadFromDisk() {
     m_table->setRowCount(0);
 
-    const std::filesystem::path path = FilePath();
+    const std::filesystem::path path = CurrentPath();
+    if (IsPerGame()) {
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec)) {
+            m_source_label->setText(
+                tr("No per-game file yet: this game uses the global host overrides."));
+        } else if (std::filesystem::exists(EtagPathFor(path), ec)) {
+            m_source_label->setText(tr("Source: downloaded from shad-net. The emulator may "
+                                       "refresh it automatically; saving edits makes it local."));
+        } else {
+            m_source_label->setText(tr("Source: local file (edited by you). It is never "
+                                       "replaced automatically."));
+        }
+    }
     std::ifstream in(path);
     if (!in.is_open()) {
         return; // No file yet
@@ -487,8 +697,33 @@ bool HostOverridesDialog::SaveToDisk() {
         return false;
     }
 
-    const std::filesystem::path path = FilePath();
+    const std::filesystem::path path = CurrentPath();
     std::error_code ec;
+
+    if (IsPerGame()) {
+        const auto etag_path = EtagPathFor(path);
+        if (root.empty()) {
+            // An empty per-game file would hide the global list; remove it instead.
+            RemoveIfExists(path);
+            RemoveIfExists(etag_path);
+            return true;
+        }
+        // Unchanged downloaded file: keep it (and its marker) as is.
+        if (std::filesystem::exists(etag_path, ec)) {
+            std::ifstream current(path);
+            try {
+                nlohmann::ordered_json on_disk;
+                current >> on_disk;
+                if (on_disk == root) {
+                    return true;
+                }
+            } catch (const std::exception&) {
+            }
+            // Edited: drop the marker so the emulator treats it as the user's file.
+            RemoveIfExists(etag_path);
+        }
+    }
+
     std::filesystem::create_directories(path.parent_path(), ec);
 
     std::ofstream out(path, std::ios::trunc);
@@ -505,4 +740,47 @@ bool HostOverridesDialog::SaveToDisk() {
         return false;
     }
     return true;
+}
+
+void HostOverridesDialog::OnDownload() {
+    bool overwrite = false;
+    if (HasUserWrittenFile(m_title_id)) {
+        if (QMessageBox::question(
+                this, tr("Replace local overrides?"),
+                tr("This game has host overrides you edited yourself. Replace them with the "
+                   "version published on shad-net?")) != QMessageBox::Yes) {
+            return;
+        }
+        overwrite = true;
+    }
+
+    m_download_btn->setEnabled(false);
+    m_download_btn->setText(tr("Downloading..."));
+    QPointer<HostOverridesDialog> self(this);
+    DownloadForTitle(
+        m_title_id, this,
+        [self](const HostOverridesDownloadResult& result) {
+            if (!self) {
+                return;
+            }
+            self->m_download_btn->setEnabled(true);
+            self->m_download_btn->setText(tr("&Download from shad-net"));
+            switch (result.status) {
+            case HostOverridesDownloadResult::Status::Downloaded:
+                self->LoadFromDisk();
+                QMessageBox::information(self, tr("Download complete"),
+                                         tr("%1\n\nLoaded %2 entry/entries.")
+                                             .arg(result.message)
+                                             .arg(self->m_table->rowCount()));
+                break;
+            case HostOverridesDownloadResult::Status::NotPublished:
+                self->LoadFromDisk();
+                QMessageBox::information(self, tr("Nothing to download"), result.message);
+                break;
+            case HostOverridesDownloadResult::Status::Failed:
+                QMessageBox::warning(self, tr("Download failed"), result.message);
+                break;
+            }
+        },
+        overwrite);
 }
