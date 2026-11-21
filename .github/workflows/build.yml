@@ -128,7 +128,7 @@ jobs:
       - name: Configure CMake
         shell: pwsh
         run: |
-	  $clang = Join-Path $env:VCINSTALLDIR "Tools\Llvm\x64\bin\clang-cl.exe"
+	      $clang = Join-Path $env:VCINSTALLDIR "Tools\Llvm\x64\bin\clang-cl.exe"
           if (-not (Test-Path $clang)) {
             Write-Error "Visual Studio's clang-cl not found at $clang"
             exit 1
