@@ -405,8 +405,6 @@ if (WIN32)
     if (MSVC)
         # Needed for conflicts with time.h of windows.h
         add_definitions(-D_TIMESPEC_DEFINED)
-        # Temp fix for CI
-        add_compile_definitions(_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH)
     endif()
 
     # Target Windows 10 RS5

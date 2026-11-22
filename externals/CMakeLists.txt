@@ -10,11 +10,6 @@ set_directory_properties(PROPERTIES
     SYSTEM ON
 )
 
-if(MSVC)
-   # Temp fix for CI
-   add_compile_definitions(_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH)
-endif()
-
 # spdlog
 set(SPDLOG_NO_EXCEPTIONS ON)
 set(SPDLOG_DISABLE_GLOBAL_LOGGER ON)
